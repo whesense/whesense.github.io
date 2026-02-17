@@ -7,13 +7,14 @@
 import { loadCompareScene } from './sceneLoader.js?v=2026-02-13-layout-fix1';
 import { ImageStrip } from '../../shared/ImageStrip.js';
 import { loadPointCloudData } from './loaders/pointCloudLoader.js?v=2026-02-13-layout-fix1';
-import { CompareMultiViewRenderer } from './renderers/CompareMultiViewRenderer.js?v=2026-02-13-dpr-opt1';
+import { CompareMultiViewRenderer } from './renderers/CompareMultiViewRenderer.js?v=2026-02-17-dpr-stability-v2';
 import { DatasetFrameDock } from '../../shared/DatasetFrameDock.js';
 import { orderCameraItemsForUi } from '../../shared/cameraOrder.js';
 
 class App {
-  static VERSION = '2026-02-13-compare-v2c-dpr-adaptive';
-  static NARROW_LAYOUT_MAX_WIDTH = 980;
+  static VERSION = '2026-02-17-compare-v2f-pane-heuristic';
+  static NARROW_LAYOUT_MAX_WIDTH = 1120;
+  static NARROW_LAYOUT_MIN_ASPECT = 1.4;
 
   constructor() {
     this.loadingEl = document.getElementById('loading');
@@ -210,11 +211,19 @@ class App {
   _resolveResponsivePaneCount(requestedPanes) {
     const requested = requestedPanes === 3 ? 3 : 2;
     const vvWidth = Number(window.visualViewport?.width || 0);
+    const vvHeight = Number(window.visualViewport?.height || 0);
     const width = vvWidth > 0 ? vvWidth : Number(window.innerWidth || 0);
+    const height = vvHeight > 0 ? vvHeight : Number(window.innerHeight || 0);
+    const aspect = height > 0 ? width / height : Infinity;
+
+    if (requested !== 3) return 2;
     if (width > 0 && width <= App.NARROW_LAYOUT_MAX_WIDTH) {
       return 2;
     }
-    return requested;
+    if (Number.isFinite(aspect) && aspect < App.NARROW_LAYOUT_MIN_ASPECT) {
+      return 2;
+    }
+    return 3;
   }
 
   async _rebuildRendererForActivePaneCount() {
@@ -276,13 +285,38 @@ class App {
       pcA: this.canvasPcA,
       pcB: panes === 3 ? this.canvasPcB : null,
     };
-    this.renderer = new CompareMultiViewRenderer(
+    const makeRenderer = (perfOptions) => new CompareMultiViewRenderer(
       canvases,
       this.scene.occupancy,
       [pcAData, pcBData],
       this.occRenderOptions,
-      this.renderPerfOptions
+      perfOptions
     );
+
+    try {
+      this.renderer = makeRenderer(this.renderPerfOptions);
+    } catch (primaryErr) {
+      const conservativePerf = this._buildConservativePerfOptions(this.renderPerfOptions);
+      console.warn('Renderer init failed; retrying with conservative DPR/perf settings.', primaryErr);
+      this.renderer = makeRenderer(conservativePerf);
+      this.renderPerfOptions = conservativePerf;
+    }
+  }
+
+  _buildConservativePerfOptions(base = {}) {
+    const opts = { ...(base || {}) };
+    const cap = (value, fallback, max) => {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n <= 0) return fallback;
+      return Math.min(max, n);
+    };
+    opts.maxDevicePixelRatio = cap(opts.maxDevicePixelRatio, 0.9, 0.9);
+    opts.idlePixelRatio = cap(opts.idlePixelRatio, 0.9, 0.9);
+    opts.activePixelRatio = cap(opts.activePixelRatio, 0.8, 0.8);
+    if (Number.isFinite(Number(opts.fixedPixelRatio)) && Number(opts.fixedPixelRatio) > 0) {
+      opts.fixedPixelRatio = cap(opts.fixedPixelRatio, 0.9, 0.9);
+    }
+    return opts;
   }
 
   _parseOccRenderOptions(urlParams) {

@@ -2,7 +2,7 @@
  * Multi-canvas compare renderer:
  * - left canvas: occupancy voxels
  * - right canvases: 1 or 2 point cloud views (camera pose synced from left every frame)
- * - controls are bound to the shared bottom pane so interaction works from any view
+ * - controls are bound to the shared bottom pane (single interaction surface)
  *
  * Supports dynamic pointcloud swapping via setPointCloud(viewIndex, data).
  */
@@ -11,8 +11,8 @@ import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/exampl
 import { turboColormap, normalizeHeight } from '../utils/turboColormap.js';
 
 const FLIP_LEFT_RIGHT = true;
-const DEFAULT_MAX_IDLE_DEVICE_PIXEL_RATIO = 2;
-const DEFAULT_ACTIVE_PIXEL_RATIO = 1;
+const DEFAULT_MAX_IDLE_DEVICE_PIXEL_RATIO = 0.9;
+const DEFAULT_ACTIVE_PIXEL_RATIO = 0.9;
 const DEFAULT_INTERACTION_HOLD_MS = 180;
 
 function clampPositive(value, fallback, min = 0.5, max = 4) {
@@ -300,6 +300,7 @@ export class CompareMultiViewRenderer {
       canvas: this.canvases.occ,
       antialias: true,
       alpha: false,
+      precision: 'mediump',
       powerPreference: 'high-performance',
     });
     this.rendererOcc.setClearColor(0x1a1a1a, 1.0);
@@ -308,6 +309,7 @@ export class CompareMultiViewRenderer {
       canvas: this.canvases.pcA,
       antialias: true,
       alpha: false,
+      precision: 'mediump',
       powerPreference: 'high-performance',
     });
     this.rendererPc[0].setClearColor(0x1a1a1a, 1.0);
@@ -318,6 +320,7 @@ export class CompareMultiViewRenderer {
         canvas: this.canvases.pcB,
         antialias: true,
         alpha: false,
+        precision: 'mediump',
         powerPreference: 'high-performance',
       });
       this.rendererPc[1].setClearColor(0x1a1a1a, 1.0);
@@ -463,7 +466,7 @@ export class CompareMultiViewRenderer {
     renderers.forEach((renderer) => {
       if (!renderer) return;
       renderer.dispose?.();
-      renderer.forceContextLoss?.();
+      renderer.renderLists?.dispose?.();
     });
     this.rendererOcc = null;
     this.rendererPc = [null, null];
