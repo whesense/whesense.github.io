@@ -1,7 +1,8 @@
 /**
  * Multi-canvas compare renderer:
- * - left canvas: occupancy voxels (with controls)
+ * - left canvas: occupancy voxels
  * - right canvases: 1 or 2 point cloud views (camera pose synced from left every frame)
+ * - controls are bound to the shared bottom pane so interaction works from any view
  *
  * Supports dynamic pointcloud swapping via setPointCloud(viewIndex, data).
  */
@@ -352,7 +353,8 @@ export class CompareMultiViewRenderer {
       this.cameraPc[i].quaternion.copy(this.cameraOcc.quaternion);
     }
 
-    this.controls = new OrbitControls(this.cameraOcc, this.rendererOcc.domElement);
+    const controlsDomElement = this.canvases.occ?.parentElement || this.rendererOcc.domElement;
+    this.controls = new OrbitControls(this.cameraOcc, controlsDomElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
     this.controls.target.set(centerY, centerX + sizeX * 0.3, eyeHeight);
